@@ -1,0 +1,234 @@
+
+Stage 1. Import Data
+=======================================
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+df = pd.read_excel('F:/ETML/Book1.xlsx')
+df
+
+Stage 2. EDA and Cleaning Data
+========================================
+df.describe() # statistical data before cleaning
+df.isnull().sum()
+
+
+df['minimum_relative_humidity'] = pd.to_numeric(df['minimum_relative_humidity'], errors='coerce') # detects '/N' value in column and changes it to NaN
+df['maximum_relative_humidity'] = pd.to_numeric(df['maximum_relative_humidity'], errors='coerce') # detects '/N' value in column and changes it to NaN
+df['relative_humidity'] = df['relative_humidity'].fillna((df['minimum_relative_humidity'] + df['maximum_relative_humidity']) / 2) # fill in the empty relative humidity data with the average of min and max.
+
+df['minimum_air_temperature'] = pd.to_numeric(df['minimum_air_temperature'], errors='coerce') # detects '/N' value in column and changes it to NaN
+df['maximum_air_temperature'] = pd.to_numeric(df['maximum_air_temperature'], errors='coerce') # detects '/N' value in column and changes it to NaN
+df['air_temperature'] = df['air_temperature'].fillna((df['minimum_air_temperature'] + df['maximum_air_temperature']) / 2) # fill in the empty water temperature data to be the average of the min and max.
+df
+
+
+df.isna().sum()
+
+
+df.duplicated().sum() # check for duplicate data
+
+
+df = df.drop(['maximum_relative_humidity','minimum_relative_humidity','maximum_air_temperature','minimum_air_temperature'],axis=1)
+df
+df.isna().sum()
+
+
+
+df = df.drop(['solar_radiation'],axis=1)
+df
+
+
+
+df.isna().sum()
+
+
+
+df_clean = df.dropna()
+df_clean
+
+
+df_clean.describe()
+
+
+
+plt.figure(figsize=(15,5))
+df_clean.boxplot(rot=90)
+plt.title('Box Plot Visualization for Each Variable')
+y_label = df_clean.columns
+plt.ylabel('Variable Value')
+plt.show()
+
+
+
+plt.figure(figsize=(15,5))
+df_clean.boxplot('bowen_ratio',rot=90)
+plt.title('Box Plot Visualization for bowen_ratio')
+y_label = df_clean.columns
+plt.ylabel('Variable Value')
+plt.show()
+
+
+
+plt.figure(figsize=(15,5))
+df_clean.boxplot('water_distance',rot=90)
+plt.title('Box Plot Visualization for water_distance')
+y_label = df_clean.columns
+plt.ylabel('Variable Value (m)')
+plt.show()
+
+
+
+plt.figure(figsize=(15,5))
+df_clean.boxplot('evapotranspiration',rot=90,
+                        boxprops=dict(color="blue"),     
+                        medianprops=dict(color="red"),  
+                        whiskerprops=dict(color="green"), 
+                        capprops=dict(color="purple"))
+plt.title('Box Plot Visualization for evapotranspiration')
+y_label = df_clean.columns
+plt.ylabel('Variable Value in (mm)')
+plt.show()
+
+
+
+
+num_features = len(df_clean.columns)
+fig, axes = plt.subplots(nrows=num_features, figsize=(5, 2 * num_features))
+for i, column in enumerate(df_clean.columns):
+    sns.histplot(df_clean[column], bins=10, ax=axes[i])
+    axes[i].set_title(f"Histogram of {column}")
+
+plt.tight_layout()
+plt.show()
+
+
+
+features = df_clean.drop(columns=['evapotranspiration','date'],axis=1)
+target = df_clean['evapotranspiration']
+features
+
+
+target
+
+
+Stage 3. Splitting Train and Test Data
+=======================================
+from sklearn.model_selection import train_test_split
+
+x_train, x_test, y_train, y_test = train_test_split(features, target, train_size=0.75, random_state=0)
+y_train
+
+
+
+y_test
+
+
+
+Stage 4. Creating Model Linear Regression (Model 1)
+===================================================
+from sklearn.linear_model import LinearRegression
+
+model = LinearRegression()
+model.fit(x_train, y_train)
+
+
+y_pred = model.predict(x_test)
+y_pred
+
+
+
+Stage 5. Evaluating Model Using R Squared and Root Mean Squared Error
+==============================================================================
+from sklearn.metrics import r2_score, mean_squared_error
+
+r2 = round(r2_score(y_test, y_pred), 4)
+print("R² Score:", r2)
+
+rmse = round(mean_squared_error(y_test, y_pred, squared=False), 4)  # Set squared=False for RMSE
+print("RMSE:", rmse)
+
+
+
+Stage 6. Multicollinearity
+==========================
+# Perform heat map visualization to see the correlation between variables (Multicollinearity)
+df_features_target = pd.concat([features,target],axis=1)
+plt.figure(figsize=(10,8))
+sns.heatmap(df_features_target.corr(),annot=True,cmap='viridis')
+plt.show()
+
+
+
+from statsmodels.stats.outliers_influence import variance_inflation_factor as vif
+from statsmodels.tools.tools import add_constant
+
+
+
+# Analysis of VIF values
+x_vif = add_constant(x_train)
+vif_df_features_target = pd.DataFrame([vif(x_vif.values,i)
+for i in range (x_vif.shape[1])], index = x_vif.columns).reset_index()
+vif_df_features_target.columns = ['features','vif_score']
+vif_df_features_target = vif_df_features_target.loc[vif_df_features_target.features!='const']
+vif_df_features_target['vif_score']=vif_df_features_target['vif_score'].round(2)
+vif_df_features_target
+
+
+
+
+# Create a function to classify vif_score
+def classify_vif (vif_score):
+  if vif_score <= 1:
+    return "No Multicollinearity"
+  elif vif_score >= 4 and vif_score < 10:
+    return "Moderate Multicollinearity"
+  elif vif_score >= 10:
+    return "High Multicollinearity"
+  else :
+    return "Low Multicollinearity"
+
+vif_df_features_target['vif_class']=vif_df_features_target['vif_score'].apply(classify_vif)
+vif_df_features_target
+
+
+
+
+Stage 7. Clearing Latent Heat and Net Radiation (Model 2)
+=========================================================
+features_no_LH_NR = features.drop(columns=['latent_heat','net_radiation'],axis=1)
+features_no_LH_NR
+
+
+x_train,x_test,y_train,y_test = train_test_split(features_no_LH_NR,target,train_size=0.75,random_state=0)
+
+
+
+model_no_LH_NR = LinearRegression()
+model_no_LH_NR.fit(x_train,y_train)
+y_pred_no_LH_NR = model_no_LH_NR.predict(x_test)
+y_pred_no_LH_NR
+
+
+
+from sklearn.metrics import r2_score, mean_squared_error
+
+r2_score_no_LH_NR = round(r2_score(y_test, y_pred_no_LH_NR), 4)
+rmse_score_no_LH_NR = round(mean_squared_error(y_test, y_pred_no_LH_NR, squared=False), 4)  # Use mean_squared_error for RMSE
+
+print("R² Score:", r2_score_no_LH_NR)
+print("RMSE:", rmse_score_no_LH_NR)
+
+
+
+print('Model 1: WITH latent_heat and net_radiation\n')
+print('Model 2: WITHOUT latent_heat and net_radiation')
+
+
+
+tabel = pd.merge(df_model_1, df_model_2, on='Metric')
+
+tabel
+
