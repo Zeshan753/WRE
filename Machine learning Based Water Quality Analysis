@@ -1,0 +1,137 @@
+import numpy as np 
+import pandas as pd 
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+import pandas as pd 
+import matplotlib.pyplot as plt 
+import numpy as np 
+import seaborn as sns
+%matplotlib inline 
+
+df = pd.read_excel('F:/TASKS/Water Sampling/GWQ_Sample.xlsx')
+df.head()
+
+df.tail()
+
+df.dtypes
+
+df.isnull().sum()
+
+df.describe().T
+
+means_column = df.mean()
+means_column
+
+df.fillna(means_column, inplace=True)
+print(df.isnull().sum())
+
+sns.set(style='white')
+fig, axs = plt.subplots(2, 2, figsize=(10,10))
+sns.histplot(data=df, x='Ca', kde=True, color='red', ax=axs[0,0])
+sns.histplot(data=df, x='Mg', kde=True, color='Gold', ax=axs[0,1])
+sns.histplot(data=df, x='Hard', kde=True, color='blue', ax=axs[1,0])
+sns.histplot(data=df, x='ALKALINITY/HCO3', kde=True, color='Indigo', ax=axs[1, 1])
+plt.show()
+
+columns_to_clean = ['TDS', 'NO3', 'pH', 'SAR']
+
+for col in columns_to_clean:
+    df[col] = df[col].replace("BDL", np.nan) 
+    df[col] = pd.to_numeric(df[col], errors='coerce') 
+
+df = df.dropna()
+
+
+sns.set(style='white')
+fig, axs = plt.subplots(2, 2, figsize=(10,10))
+sns.histplot(data=df, x='TDS', kde=True, color='skyblue', ax=axs[0,0])
+sns.histplot(data=df, x='NO3', kde=True, color='forestgreen', ax=axs[0,1])
+sns.histplot(data=df, x='pH', kde=True, color='darkorange', ax=axs[1,0])
+sns.histplot(data=df, x='SAR', kde=True, color='mediumpurple', ax=axs[1, 1])
+plt.show()
+
+
+columns_to_clean = ['E.C', 'Turbidity']
+
+for col in columns_to_clean:
+    df[col] = pd.to_numeric(df[col], errors='coerce') 
+sns.set(style='white')
+fig, axs = plt.subplots(1, 2, figsize=(10,5))
+sns.histplot(data=df, x='E.C', kde=True, color='black', ax=axs[0])
+sns.histplot(data=df, x='Turbidity', kde=True, color='Maroon', ax=axs[1])
+plt.show()
+
+
+corr_mat = df.corr()
+for x in range(corr_mat.shape[0]):
+    corr_mat.iloc[x,x] = 0.0
+    
+corr_mat 
+
+corr_mat.abs().idxmax()
+
+
+log_columns = df.skew().sort_values(ascending=False)
+log_columns = log_columns.loc[log_columns > 0.75]
+log_columns
+
+sns.heatmap(corr_mat, cmap='YlGnBu', annot=False)
+plt.show()
+
+from sklearn.preprocessing import MinMaxScaler
+mms = MinMaxScaler()
+for col in df.columns:
+    df[col] = mms.fit_transform(df[[col]]).squeeze()
+
+sns.pairplot(df, kind='scatter', hue='SAR', palette="Set2")
+
+df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+df.dropna(inplace=True)
+
+df.reset_index(drop=True, inplace=True)
+
+df = df.apply(pd.to_numeric)
+
+from sklearn.decomposition import PCA
+
+pca_list = list()
+feature_weight_list = list()
+
+for n in range(1, 6):
+
+    PCAmod = PCA(n_components=n)
+    PCAmod.fit(df)
+    
+
+    pca_list.append(pd.Series({'n': n, 'model': PCAmod,
+                               'var': PCAmod.explained_variance_ratio_.sum()}))
+    
+
+    abs_feature_values = np.abs(PCAmod.components_).sum(axis=0)
+    feature_weight_list.append(pd.DataFrame({'n': n, 
+                                             'features': df.columns,
+                                             'values': abs_feature_values / abs_feature_values.sum()}))
+    
+pca_df = pd.concat(pca_list, axis=1).T.set_index('n')
+print(pca_df)
+
+feature_df = (pd.concat(feature_weight_list).pivot(index='n', columns='features', values='values'))
+feature_df
+
+
+sns.set_context('talk')
+ax = pca_df['var'].plot(kind='bar', color='red')
+ax.set(xlabel = 'Number of dimensions',
+      ylabel='percent explained varince',
+      title='Explained varince vs dimensions')
+
+
+ax = feature_df.plot(kind='bar', figsize=(13, 8))
+ax.legend(loc='upper right')
+ax.set(xlabel='Number of dimensions',
+       ylabel='Relative importance',
+       title='Feature importance vs Dimensions');
