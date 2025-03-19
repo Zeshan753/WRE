@@ -1,0 +1,246 @@
+pip install dlib
+
+import cv2
+import os
+
+# Verify if the files exist
+prototxt_path = "C:/Users/z.ali/Desktop/ML/models/deploy.prototxt"  # Update with the correct path
+model_weights_path = "C:/Users/z.ali/Desktop/ML/models/res10_300x300_ssd_iter_140000.caffemodel"  # Update with the correct path
+
+if not os.path.exists(prototxt_path):
+    raise FileNotFoundError(f"prototxt file not found at: {prototxt_path}")
+if not os.path.exists(model_weights_path):
+    raise FileNotFoundError(f"model weights file not found at: {model_weights_path}")
+
+# Load the pre-trained model
+try:
+    net = cv2.dnn.readNetFromCaffe(prototxt_path, model_weights_path)
+    print("Model loaded successfully!")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    exit()
+
+def detect_objects(frame):
+    (h, w) = frame.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+    net.setInput(blob)
+    detections = net.forward()
+
+    for i in range(detections.shape[2]):
+        confidence = detections[0, 0, i, 2]
+        if confidence > 0.2:  # Confidence threshold
+            idx = int(detections[0, 0, i, 1])
+            if CLASSES[idx] in ["watch", "bottle", "tvmonitor", "book"]:  # Detect watch, glass (bottle), mobile phone (tvmonitor), and book
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                label = f"{CLASSES[idx]}: {confidence * 100:.2f}%"
+                cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                cv2.putText(frame, label, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    return frame
+
+# Main loop for video capture
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    raise RuntimeError("Could not open camera. Please check your camera connection.")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to capture frame. Exiting...")
+        break
+    
+    # Detect objects (watch, glass, mobile phone, book)
+    frame = detect_objects(frame)
+    
+    # Show the frame
+    cv2.imshow("Frame", frame)
+    
+    # Exit on 'q' key press
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+
+
+import cv2
+import dlib
+import numpy as np
+import os
+
+detector = dlib.get_frontal_face_detector()
+
+model_path = "C:/Users/z.ali/Desktop/ML/models/shape_predictor_68_face_landmarks.dat"  
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"Model file not found at: {model_path}")
+predictor = dlib.shape_predictor(model_path)
+
+
+prototxt_path = "C:/Users/z.ali/Desktop/ML/models/deploy.prototxt"  
+model_weights_path = "C:/Users/z.ali/Desktop/ML/models/res10_300x300_ssd_iter_140000.caffemodel"  
+if not os.path.exists(prototxt_path):
+    raise FileNotFoundError(f"prototxt file not found at: {prototxt_path}")
+if not os.path.exists(model_weights_path):
+    raise FileNotFoundError(f"model weights file not found at: {model_weights_path}")
+
+# Load the pre-trained model
+try:
+    net = cv2.dnn.readNetFromCaffe(prototxt_path, model_weights_path)
+    print("Model loaded successfully!")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    exit()
+
+# Define the classes for object detection
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+           "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+           "dog", "horse", "motorbike", "person", "pottedplant",
+           "sheep", "sofa", "train", "tvmonitor", "watch", "glass", "mobile phone", "book"]
+
+def detect_pupil(eye_region):
+    gray_eye = cv2.cvtColor(eye_region, cv2.COLOR_BGR2GRAY)
+    blurred_eye = cv2.GaussianBlur(gray_eye, (7, 7), 0)
+    _, threshold_eye = cv2.threshold(blurred_eye, 50, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(threshold_eye, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if contours:
+        pupil_contour = max(contours, key=cv2.contourArea)
+        px, py, pw, ph = cv2.boundingRect(pupil_contour)
+        return (px + pw // 2, py + ph // 2), (px, py, pw, ph)
+    return None, None
+
+def detect_water(frame):
+
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+
+    lower_water = np.array([90, 50, 50])
+    upper_water = np.array([130, 255, 255])
+    
+
+    water_mask = cv2.inRange(hsv, lower_water, upper_water)
+    
+
+    contours, _ = cv2.findContours(water_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+
+    water_detected = False
+    for contour in contours:
+        if cv2.contourArea(contour) > 500:  
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            water_detected = True
+    
+    return frame, water_detected
+
+def detect_objects(frame):
+    (h, w) = frame.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+    net.setInput(blob)
+    detections = net.forward()
+
+    for i in range(detections.shape[2]):
+        confidence = detections[0, 0, i, 2]
+        if confidence > 0.2:  
+            idx = int(detections[0, 0, i, 1])
+            if CLASSES[idx] in ["watch", "bottle", "tvmonitor", "book"]:  
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                label = f"{CLASSES[idx]}: {confidence * 100:.2f}%"
+                cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                cv2.putText(frame, label, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    return frame
+
+def process_eye_movement(frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = detector(gray)
+    gaze_direction = "Looking Center"
+
+    for face in faces:
+        landmarks = predictor(gray, face)
+        
+        left_eye_points = np.array([(landmarks.part(n).x, landmarks.part(n).y) for n in range(36, 42)])
+        right_eye_points = np.array([(landmarks.part(n).x, landmarks.part(n).y) for n in range(42, 48)])
+        
+        left_eye_rect = cv2.boundingRect(left_eye_points)
+        right_eye_rect = cv2.boundingRect(right_eye_points)
+        
+
+        left_eye = frame[left_eye_rect[1]:left_eye_rect[1] + left_eye_rect[3], left_eye_rect[0]:left_eye_rect[0] + left_eye_rect[2]]
+        right_eye = frame[right_eye_rect[1]:right_eye_rect[1] + right_eye_rect[3], right_eye_rect[0]:right_eye_rect[0] + right_eye_rect[2]]
+        
+
+        left_pupil, left_bbox = detect_pupil(left_eye)
+        right_pupil, right_bbox = detect_pupil(right_eye)
+        
+
+        cv2.rectangle(frame, (left_eye_rect[0], left_eye_rect[1]), 
+                      (left_eye_rect[0] + left_eye_rect[2], left_eye_rect[1] + left_eye_rect[3]), (0, 255, 0), 2)
+        cv2.rectangle(frame, (right_eye_rect[0], right_eye_rect[1]), 
+                      (right_eye_rect[0] + right_eye_rect[2], right_eye_rect[1] + right_eye_rect[3]), (0, 255, 0), 2)
+        
+        if left_pupil and left_bbox:
+            cv2.circle(frame, (left_eye_rect[0] + left_pupil[0], left_eye_rect[1] + left_pupil[1]), 5, (0, 0, 255), -1)
+        if right_pupil and right_bbox:
+            cv2.circle(frame, (right_eye_rect[0] + right_pupil[0], right_eye_rect[1] + right_pupil[1]), 5, (0, 0, 255), -1)
+        
+
+        if left_pupil and right_pupil:
+            lx, ly = left_pupil
+            rx, ry = right_pupil
+            
+            eye_width = left_eye_rect[2]
+            eye_height = left_eye_rect[3]
+            norm_lx, norm_rx = lx / eye_width, rx / eye_width
+            norm_ly, norm_ry = ly / eye_height, ry / eye_height
+            
+            if norm_lx < 0.4 and norm_rx < 0.3:
+                gaze_direction = "Looking Left"
+            elif norm_lx > 0.6 and norm_rx > 0.3:
+                gaze_direction = "Looking Right"
+            elif norm_ly < 0.4 and norm_ry < 0.3:
+                gaze_direction = "Looking Up"
+            elif norm_ly > 0.6 and norm_ry > 0.3:
+                gaze_direction = "Looking Down"
+            else:
+                gaze_direction = "Looking Center"
+    
+    return frame, gaze_direction
+
+
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    raise RuntimeError("Could not open camera. Please check your camera connection.")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to capture frame. Exiting...")
+        break
+    
+
+    frame, gaze_direction = process_eye_movement(frame)
+    
+
+    frame, water_detected = detect_water(frame)
+    
+
+    frame = detect_objects(frame)
+    
+
+    cv2.putText(frame, f"Gaze: {gaze_direction}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(frame, f"Water Detected: {water_detected}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+    
+
+    cv2.imshow("Frame", frame)
+    
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
