@@ -1,0 +1,114 @@
+import datetime as dt
+import math
+
+# Hargreaves-Samani Method
+class HargreavesSamani:
+    def __init__(self, latitude):
+        self.latitude = latitude
+
+    def calculate_et(self, temperature_max, temperature_min, temperature_mean, solar_radiation, adatetime):
+        j = adatetime.timetuple().tm_yday
+        dr = 1 + 0.033 * math.cos(2 * math.pi * j / 365)
+        decl = 0.409 * math.sin(2 * math.pi * j / 365 - 1.39)
+        phi = self.latitude * math.pi / 180
+        omega_s = math.acos(-math.tan(phi) * math.tan(decl))
+        ra = (24 * 60 / math.pi * 0.0820 * dr * (omega_s * math.sin(phi) * math.sin(decl) + math.cos(phi) * math.cos(decl) * math.sin(omega_s)))
+        
+        et = 0.0023 * (temperature_mean + 17.8) * ((temperature_max - temperature_min) ** 0.5) * ra
+        return et
+
+# Priestley-Taylor Method
+class PriestleyTaylor:
+    def __init__(self, alpha=1.26):
+        self.alpha = alpha
+        self.sigma = 4.903e-9  # Stefan-Boltzmann constant
+
+    def calculate_et(self, temperature_mean, solar_radiation, humidity, pressure):
+        delta = 4098 * (0.6108 * math.exp(17.27 * temperature_mean / (237.3 + temperature_mean))) / ((temperature_mean + 237.3) ** 2)
+        gamma = 0.000665 * pressure
+        rn = (1 - 0.23) * solar_radiation  # Assuming standard albedo for grass
+        et = (self.alpha * (delta / (delta + gamma)) * rn) / 2.45  # Convert to mm/day
+        return et
+
+# Blaney-Criddle Method
+class BlaneyCriddle:
+    def __init__(self, k=0.85):  # Crop coefficient
+        self.k = k
+
+    def calculate_et(self, temperature_mean, daylight_hours, humidity):
+        p = daylight_hours / 24  # Proportion of daylight hours in a day
+        et = self.k * p * (0.46 * temperature_mean + 8.13) * (1 - 0.01 * humidity)  # Modified for humidity effect
+        return et
+
+# Thornthwaite Method
+class Thornthwaite:
+    def __init__(self, latitude):
+        self.latitude = latitude
+
+    def calculate_et(self, temperature_mean, month, annual_temperature):
+        i = sum([(t / 5) ** 1.514 for t in annual_temperature])  # Heat index
+        a = (6.75e-7 * i**3) - (7.71e-5 * i**2) + (1.792e-2 * i) + 0.49239
+        et = 16 * ((10 * temperature_mean / i) ** a)
+        return et
+
+# FAO Penman-Monteith Method
+class FAOPenmanMonteith:
+    def calculate_et(self, net_radiation, temperature_mean, wind_speed, humidity, pressure):
+        delta = 4098 * (0.6108 * math.exp(17.27 * temperature_mean / (237.3 + temperature_mean))) / ((temperature_mean + 237.3) ** 2)
+        gamma = 0.000665 * pressure
+        et = (0.408 * delta * net_radiation + gamma * (900 / (temperature_mean + 273)) * wind_speed * (1 - humidity)) / (delta + gamma * (1 + 0.34 * wind_speed))
+        return et
+
+# SEBAL Method
+class SEBAL:
+    def calculate_et(self, net_radiation, soil_heat_flux, sensible_heat_flux):
+        et = (net_radiation - soil_heat_flux - sensible_heat_flux) / 2.45  # Convert to mm/day
+        return et
+
+
+elevation = 79.1  # meters
+latitude = 28.39845657  # degrees
+longitude = 70.38293457  # degrees
+time_step = "D"
+temperature_max = 25.235102468  # °C
+temperature_min = 22.321983978  # °C
+temperature_mean = (temperature_max + temperature_min) / 2
+solar_radiation = 20.21  # MJ/m2/day
+humidity = 61.32  # %
+pressure = 100.05  # kPa
+wind_speed = 1.69  # m/s
+net_radiation = 25.05  # MJ/m2/day
+soil_heat_flux = 5.22  # MJ/m2/day
+sensible_heat_flux = 2.0  # MJ/m2/day
+adatetime = dt.date(2024, 3, 21)
+daylight_hours = 12
+annual_temperature = [10, 15, 25, 23.41, 25.01, 35.11, 35.5, 32.84, 29.66, 30.8, 24.02, 19.15]  # Example monthly temperatures
+# Compute ET using Hargreaves-Samani Method
+hs = HargreavesSamani(latitude)
+evapotranspiration_hs = hs.calculate_et(temperature_max, temperature_min, temperature_mean, solar_radiation, adatetime)
+print(f"Hargreaves-Samani ET: {evapotranspiration_hs:.2f} mm/day")
+
+# Compute ET using Priestley-Taylor Method
+pt = PriestleyTaylor()
+evapotranspiration_pt = pt.calculate_et(temperature_mean, solar_radiation, humidity, pressure)
+print(f"Priestley-Taylor ET: {evapotranspiration_pt:.2f} mm/day")
+
+# Compute ET using Blaney-Criddle Method
+bc = BlaneyCriddle()
+evapotranspiration_bc = bc.calculate_et(temperature_mean, daylight_hours, humidity)
+print(f"Blaney-Criddle ET: {evapotranspiration_bc:.2f} mm/day")
+
+# Compute ET using Thornthwaite Method
+tw = Thornthwaite(latitude)
+evapotranspiration_tw = tw.calculate_et(temperature_mean, adatetime.month, annual_temperature)
+print(f"Thornthwaite ET: {evapotranspiration_tw:.2f} mm/day")
+
+# Compute ET using FAO Penman-Monteith Method
+fao_pm = FAOPenmanMonteith()
+evapotranspiration_fao_pm = fao_pm.calculate_et(net_radiation, temperature_mean, wind_speed, humidity, pressure)
+print(f"FAO Penman-Monteith ET: {evapotranspiration_fao_pm:.2f} mm/day")
+
+# Compute ET using SEBAL Method
+sebal = SEBAL()
+evapotranspiration_sebal = sebal.calculate_et(net_radiation, soil_heat_flux, sensible_heat_flux)
+print(f"SEBAL ET: {evapotranspiration_sebal:.2f} mm/day")
